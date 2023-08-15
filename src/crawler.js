@@ -128,6 +128,36 @@ const updateMaimaiScore = async (
     ];
 
     const tasks = [];
+    let recordsStr = "";
+    let records = [];
+    let crawlRecords = [];
+    await stage('获取玩家成绩', 0, async () => {
+      await fetch(
+        "https://www.diving-fish.com/api/maimaidxprober/login",
+        {
+          method: "post",
+          headers: {
+            Host: "www.diving-fish.com",
+            Origin: "https://www.diving-fish.com",
+            Referer: "https://www.diving-fish.com/maimaidx/prober/",
+            "Content-Type": "application/json;charset=UTF-8",
+          },
+          body: JSON.stringify({ username, password }),
+        }
+      );
+      recordsStr = await fetch(
+        `https://www.diving-fish.com/api/maimaidxprober/player/records`,
+        {
+          method: "get",
+          headers: {
+            Host: "www.diving-fish.com",
+            Origin: "https://www.diving-fish.com",
+            Referer: "https://www.diving-fish.com/maimaidx/prober/",
+            "Content-Type": "application/json;charset=UTF-8",
+          }
+        }
+      );
+    });
     [0, 1, 2, 3, 4].forEach(diff => {
       const name = diffNameList[diff]
       const progress = 9;
@@ -139,7 +169,6 @@ const updateMaimaiScore = async (
           });
           return;
         }
-
         // Sleep random time to avoid ban
         await new Promise((r) => setTimeout(r, 1000 * (diff + 1) * 2 + 1000 * 5 * Math.random()));
 
@@ -154,104 +183,68 @@ const updateMaimaiScore = async (
             .replace(/\s+/g, " ");
         });
         await stage(
-          `解析 ${name} 分数并上传`,
+          `解析 ${name} 分数`,
           progress,
-          // async () => {
-          //   const uploadResult = await fetch(`${config.pageParserHost}/page`, {
-          //     method: "post",
-          //     headers: { "content-type": "text/plain" },
-          //     body: `<login><u>${username}</u><p>${password}</p></login>${body}`,
-          //   });
-          //
-          //   const log = `diving-fish 上传 ${
-          //     name
-          //   } 分数接口返回消息: ${await uploadResult.text()}`;
-          //   await trace({ log });
-          // }
           async () => {
-            let parseResult = await pageToRecordList(body).then();
-            await fetch(
-              "https://www.diving-fish.com/api/maimaidxprober/login",
-              {
-                method: "post",
-                headers: {
-                  Host: "www.diving-fish.com",
-                  Origin: "https://www.diving-fish.com",
-                  Referer: "https://www.diving-fish.com/maimaidx/prober/",
-                  "Content-Type": "application/json;charset=UTF-8",
-                },
-                body: JSON.stringify({ username, password }),
-              }
-            );
-            const result = await fetch(
-              `https://www.diving-fish.com/api/maimaidxprober/player/records`,
-              {
-                method: "get",
-                headers: {
-                  Host: "www.diving-fish.com",
-                  Origin: "https://www.diving-fish.com",
-                  Referer: "https://www.diving-fish.com/maimaidx/prober/",
-                  "Content-Type": "application/json;charset=UTF-8",
-                }
-              }
-            );
-            const jsonStr = await result.text();
-            let scoreObj = JSON.parse(jsonStr).records;
-            parseResult.sort((a, b) => {
-              return a.song_id === b.song_id ? a.level_index - b.level_index : a.song_id - b.song_id;
-            })
-            scoreObj.sort((a, b) => {
-              return a.song_id === b.song_id ? a.level_index - b.level_index : a.song_id - b.song_id;
-            })
-            let recordsResult = [];
-            let i = 0;
-            let j = 0;
-            for (; i < parseResult.length; ++i) {
-              for (; j < scoreObj.length; ++j) {
-                let x = parseResult[i];
-                let y = scoreObj[j];
-                if (x.song_id < y.song_id || x.song_id === y.song_id && x.level_index < y.level_index) {
-                  recordsResult.push(x);
-                  break;
-                }
-                else if (x.song_id === y.song_id && x.level_index === y.level_index) {
-                  recordsResult.push(
-                    x.achievements < y.achievements ? x : y.achievements === x.achievements ? x.dxScore < y.dxScore ? y : x : x
-                  );
-                  ++j;
-                  break;
-                }
-                else {
-                  recordsResult.push(y);
-                  continue;
-                }
-              }
-            }
-            while (j < scoreObj.length) {
-              recordsResult.push(scoreObj[j]);
-              ++j;
-            }
-            const retCode = await fetch(
-              "https://www.diving-fish.com/api/maimaidxprober/player/update_records",
-              {
-                method: "post",
-                headers: {
-                  Host: "www.diving-fish.com",
-                  Origin: "https://www.diving-fish.com",
-                  Referer: "https://www.diving-fish.com/maimaidx/prober/",
-                  "Content-Type": "application/json;charset=UTF-8",
-                },
-                body: JSON.stringify(recordsResult)
-              }
-            );
-            await trace({log: retCode});
+            crawlRecords = crawlRecords.concat(await pageToRecordList(body).then());
           }
-        )
+        );
       }, true);
       tasks.push(task);
     });
 
     await Promise.all(tasks);
+
+    await stage('取最高值并上传', 0, async () => {
+      const jsonStr = await recordsStr.text();
+      records = JSON.parse(jsonStr).records;
+      crawlRecords.sort((a, b) => {
+        return a.song_id === b.song_id ? a.level_index - b.level_index : a.song_id - b.song_id;
+      })
+      records.sort((a, b) => {
+        return a.song_id === b.song_id ? a.level_index - b.level_index : a.song_id - b.song_id;
+      })
+      let recordsResult = [];
+      let i = 0;
+      let j = 0;
+      for (; i < crawlRecords.length; ++i) {
+        for (; j < records.length; ++j) {
+          let x = crawlRecords[i];
+          let y = records[j];
+          if (x.song_id < y.song_id || x.song_id === y.song_id && x.level_index < y.level_index) {
+            recordsResult.push(x);
+            break;
+          }
+          else if (x.song_id === y.song_id && x.level_index === y.level_index) {
+            recordsResult.push(
+              x.achievements < y.achievements ? y : x.achievements === y.achievements ? x.dxScore < y.dxScore ? y : x : x
+            );
+            ++j;
+            break;
+          }
+          else {
+            recordsResult.push(y);
+          }
+        }
+      }
+      while (j < records.length) {
+        recordsResult.push(records[j]);
+        ++j;
+      }
+      const retCode = await fetch(
+        "https://www.diving-fish.com/api/maimaidxprober/player/update_records",
+        {
+          method: "post",
+          headers: {
+            Host: "www.diving-fish.com",
+            Origin: "https://www.diving-fish.com",
+            Referer: "https://www.diving-fish.com/maimaidx/prober/",
+            "Content-Type": "application/json;charset=UTF-8",
+          },
+          body: JSON.stringify(recordsResult)
+        }
+      );
+    }, true);
 
     await trace({
       log: "maimai 数据更新完成",
