@@ -36,7 +36,8 @@
     "node-fetch": "^3.3.0",
     "node-fetch-cookies": "^2.0.4",
     "node-schedule": "^2.1.1",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "axios": "^0.27.2"
   },
   "devDependencies": {
     "node": "^16.19.0"
