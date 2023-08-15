@@ -1,12 +1,9 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const xpath = require("xpath");
-const dom = require("xmldom").DOMParser;
-const { default: axios } = require("axios");
-const xmldom = require("xmldom");
-const fs = require("fs");
+import xpath from "xpath";
+import {DOMParser} from "xmldom";
+import axios from "axios";
 
-music_data = [];
+const dom = DOMParser;
+let music_data = [];
 
 const getDS = function (title, index, type) {
   for (const music of music_data) {
@@ -84,11 +81,7 @@ const computeRecord = function (record) {
   }
 };
 
-module.exports = {
-  pageToRecordList: pageToRecordList
-};
-
-async function pageToRecordList(pageData) {
+export async function pageToRecordList(pageData) {
   await axios
     .get("https://www.diving-fish.com/api/maimaidxprober/music_data")
     .then((resp) => {
@@ -160,7 +153,7 @@ async function pageToRecordList(pageData) {
     );
     if (title == "Link") {
       if (typeNode) {
-        dxScore = parseInt(dxScoreNode.textContent.split('/')[1])
+        let dxScore = parseInt(dxScoreNode.textContent.split('/')[1])
         if (dxScore != link_dx_score[level_index]) {
           title = "Link(CoF)";
         }
